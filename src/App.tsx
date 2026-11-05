@@ -4,6 +4,7 @@ import { useMidi, useMobileLayout, usePreferences, useTone } from "./hooks.ts";
 import {
   createQuestion,
   DIFFICULTY_NAMES,
+  getAnswerNoteNames,
   MODE_NAMES,
   NOTE_NAMES,
   pitchClass,
@@ -124,6 +125,7 @@ function App() {
   );
   const midi = useMidi(!mobile, submit);
   const modeName = MODE_NAMES[preferences.mode];
+  const answerNoteNames = getAnswerNoteNames(preferences);
   const scaleName = `${NOTE_NAMES[preferences.tonic]} ${modeName}`;
   const accuracy = session.total
     ? Math.round((session.correct / session.total) * 100)
@@ -473,8 +475,8 @@ function App() {
                 <div className="success-feedback">
                   <Icon name="check" size={17} />
                   <span>
-                    {NOTE_NAMES[preferences.tonic]} →{" "}
-                    <strong>{NOTE_NAMES[session.question.answer]}</strong>
+                    {answerNoteNames[preferences.tonic]} →{" "}
+                    <strong>{answerNoteNames[session.question.answer]}</strong>
                     <span className="feedback-divider">·</span>
                     {session.question.degree.label}
                     <span className="feedback-interval">
@@ -524,9 +526,9 @@ function App() {
             </div>
             {mobile ? (
               <div className="note-grid" aria-label="选择音名">
-                {NOTE_NAMES.map((name, pitch) => (
+                {answerNoteNames.map((name, pitch) => (
                   <button
-                    key={name}
+                    key={pitch}
                     className={`note-pad ${answerClass(pitch)}`}
                     aria-label={`回答 ${name}`}
                     disabled={session.solved}
@@ -545,10 +547,10 @@ function App() {
                       key={pitch}
                       className={`piano-key white-key ${answerClass(pitch)}`}
                       disabled={session.solved}
-                      aria-label={`回答 ${NOTE_NAMES[pitch]}，快捷键 ${KEY_CODES[pitch].slice(3)}`}
+                      aria-label={`回答 ${answerNoteNames[pitch]}，快捷键 ${KEY_CODES[pitch].slice(3)}`}
                       onClick={() => submit(pitch)}
                     >
-                      <span>{NOTE_NAMES[pitch]}</span>
+                      <span>{answerNoteNames[pitch]}</span>
                       <kbd>{KEY_CODES[pitch].slice(3)}</kbd>
                       {renderNoteFeedback(pitch)}
                     </button>
@@ -563,10 +565,10 @@ function App() {
                         style={{ "--key-position": position } as CSSProperties}
                         className={`piano-key black-key ${answerClass(pitch)}`}
                         disabled={session.solved}
-                        aria-label={`回答 ${NOTE_NAMES[pitch]}，快捷键 ${KEY_CODES[pitch].slice(3)}`}
+                        aria-label={`回答 ${answerNoteNames[pitch]}，快捷键 ${KEY_CODES[pitch].slice(3)}`}
                         onClick={() => submit(pitch)}
                       >
-                        <span>{NOTE_NAMES[pitch]}</span>
+                        <span>{answerNoteNames[pitch]}</span>
                         <kbd>{KEY_CODES[pitch].slice(3)}</kbd>
                         {renderNoteFeedback(pitch)}
                       </button>

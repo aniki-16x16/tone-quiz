@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createQuestion,
+  getAnswerNoteNames,
   getQuestionGroups,
   parsePreferences,
   pitchClass,
@@ -17,6 +18,36 @@ const question = {
 };
 const answer = (state, note) =>
   practiceReducer(state, { type: "answer", note });
+
+test("all 24 keys choose stable black-key labels and keep white keys natural", () => {
+  const sharpNames = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+  const flatNames = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"];
+  const keys = [
+    ["C", 0, "sharp", "flat"],
+    ["D♭ / C♯", 1, "flat", "sharp"],
+    ["D", 2, "sharp", "flat"],
+    ["E♭", 3, "flat", "flat"],
+    ["E", 4, "sharp", "sharp"],
+    ["F", 5, "flat", "flat"],
+    ["G♭ / F♯", 6, "flat", "sharp"],
+    ["G", 7, "sharp", "flat"],
+    ["A♭ / G♯", 8, "flat", "sharp"],
+    ["A", 9, "sharp", "sharp"],
+    ["B♭", 10, "flat", "flat"],
+    ["B", 11, "sharp", "sharp"],
+  ];
+  for (const [name, tonic, major, minor] of keys) {
+    for (const [mode, spelling] of [["major", major], ["minor", minor]]) {
+      for (const difficulty of ["diatonic", "chromatic"]) {
+        assert.deepEqual(
+          getAnswerNoteNames({ tonic, mode, difficulty }),
+          spelling === "sharp" ? sharpNames : flatNames,
+          `${name} ${mode} ${difficulty}`,
+        );
+      }
+    }
+  }
+});
 
 test("all 24 keys contain exactly their seven diatonic pitches; advanced covers all twelve", () => {
   for (let tonic = 0; tonic < 12; tonic++) {

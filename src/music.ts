@@ -13,6 +13,21 @@ export const NOTE_NAMES = [
   "B",
 ] as const;
 
+const SHARP_NOTE_NAMES = [
+  "C",
+  "C♯",
+  "D",
+  "D♯",
+  "E",
+  "F",
+  "F♯",
+  "G",
+  "G♯",
+  "A",
+  "A♯",
+  "B",
+] as const;
+
 export type Mode = "major" | "minor";
 export type Difficulty = "diatonic" | "chromatic";
 export type QuizConfig = { tonic: number; mode: Mode; difficulty: Difficulty };
@@ -81,6 +96,17 @@ const ALTERED = [
 
 export function pitchClass(note: number): number {
   return ((note % 12) + 12) % 12;
+}
+
+export function getAnswerNoteNames(config: Pick<QuizConfig, "tonic" | "mode">) {
+  // Relative major determines the signature family; C / A minor default to sharps.
+  // Only black-key labels change. White keys remain natural pitch-class labels.
+  const relativeMajor = pitchClass(
+    config.tonic + (config.mode === "minor" ? 3 : 0),
+  );
+  return [0, 7, 2, 9, 4, 11].includes(relativeMajor)
+    ? SHARP_NOTE_NAMES
+    : NOTE_NAMES;
 }
 
 export function getQuestionGroups(config: QuizConfig): Degree[][] {
