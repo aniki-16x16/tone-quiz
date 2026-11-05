@@ -1,32 +1,39 @@
-# React + TypeScript + Vite
+# 音题 · Tone Quiz
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+通过「调式 + 级数 → 音高」的单音答题练习，建立相对级数与固定音名的联系。
 
-Currently, two official plugins are available:
+## 运行
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+需要 Node.js 22.18+（测试直接执行 TypeScript）。
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+桌面打开 Vite 提供的本机地址。手机预览时使用 `npm run dev -- --host 0.0.0.0`，在同一局域网访问终端中的 Network 地址。
+
+```sh
+npm test       # 音乐规则、练习状态和 MIDI 消息测试
+npm run build # TypeScript 检查与生产构建
+npm run lint
+```
+
+## 使用
+
+- 选择主音、自然大调 / 自然小调和基础 / 进阶。更改这三项会开始新一轮统计。
+- 基础只出调内音；进阶混入调外音，保留 ♯9、♯11 等音程写法。
+- PC 点击钢琴键，或使用白键 `A S D F G H J`、黑键 `W E T Y U` 作答。
+- 手机竖屏使用 3 列 × 4 行音名按钮；点调式摘要展开设置。不提供移动端 MIDI。
+- 答对后可自动或手动切题；答错仅播放快速错误动画，留在原题，不显示答案或提示。
+- 正确率只统计每道题的首次作答。所有输入只比较音高类别，始终不考八度。
+- 「听主音」播放参考音；「答题发声」控制作答时所选音的声音。
+- 调式、题目范围及声音 / 切题偏好保存在本机浏览器；练习成绩仅保留在本轮内存中。
+
+## 桌面 MIDI
+
+通过右上角「连接 MIDI → 连接设备」授权，然后选择输入设备。使用支持 Web MIDI 的桌面浏览器，例如 Chrome / Edge，并通过 HTTPS 或 `localhost` 打开。普通局域网 HTTP 地址可以进行触控练习，但不能使用 MIDI。
+
+任意八度的同一个音都视作相同答案。连续持键、重复 Note On 或一次按下多个琴键不会连答多题；全部琴键松开后才能继续。支持设备热插拔、输入选择与授权失败后重试。踏板不参与判题。
+
+详细业务规则见 [spec.md](./spec.md)。
