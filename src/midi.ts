@@ -1,4 +1,5 @@
 export type NoteMessage = { kind: "on" | "off"; note: number; channel: number };
+export type MidiFrame = { notes: number[]; noteOn?: number; first: boolean };
 
 export function parseMidiNote(data: ArrayLike<number>): NoteMessage | null {
   if (data.length < 3) return null;
@@ -15,6 +16,10 @@ export function parseMidiNote(data: ArrayLike<number>): NoteMessage | null {
 
 export class MidiNoteGate {
   private held = new Set<string>();
+
+  get notes(): number[] {
+    return [...new Set([...this.held].map(key => Number(key.split(":")[1])))].sort((a, b) => a - b);
+  }
 
   receive(message: NoteMessage): { submit: boolean; held: boolean } {
     const key = `${message.channel}:${message.note}`;

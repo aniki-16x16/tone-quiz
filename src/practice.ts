@@ -1,5 +1,6 @@
 import { pitchClass } from "./music.ts";
 import type { Question } from "./music.ts";
+import { judgeChord } from "./chords.ts";
 
 export type PracticeState = {
   question: Question;
@@ -14,6 +15,7 @@ export type PracticeState = {
 };
 export type PracticeAction =
   | { type: "answer"; note: number }
+  | { type: "chord"; notes: readonly number[]; noteOn?: number; previousId: number }
   | { type: "next"; nextQuestion: Question; previousId: number }
   | { type: "restart"; question: Question; nextQuestion: Question };
 
@@ -51,9 +53,22 @@ export function practiceReducer(
       lastAnswer: null,
     };
   }
-  if (state.solved || !Number.isInteger(action.note)) return state;
-  const answer = pitchClass(action.note);
-  const solved = answer === state.question.answer;
+  if (state.solved) return state;
+  let answer: number;
+  let solved: boolean;
+  if (action.type === "chord") {
+    if (!state.question.chord || action.previousId !== state.question.id) return state;
+    const result = judgeChord(state.question, action.notes);
+    if (result === "incomplete") return state;
+    if (result === "wrong" && (action.noteOn === undefined ||
+      state.question.chord.tones.includes(pitchClass(action.noteOn)))) return state;
+    solved = result === "correct";
+    answer = solved ? state.question.answer : pitchClass(action.noteOn!);
+  } else {
+    if (state.question.chord || !Number.isInteger(action.note)) return state;
+    answer = pitchClass(action.note);
+    solved = answer === state.question.answer;
+  }
   const firstAttempt = state.attempts === 0;
   return {
     ...state,

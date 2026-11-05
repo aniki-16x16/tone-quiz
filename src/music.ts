@@ -33,7 +33,21 @@ export type Difficulty = "diatonic" | "chromatic";
 export type QuizConfig = { tonic: number; mode: Mode; difficulty: Difficulty };
 export type Preferences = QuizConfig & { autoAdvance: boolean; sound: boolean };
 export type Degree = { label: string; semitones: number; interval: string };
-export type Question = { id: number; degree: Degree; answer: number };
+export type ChordDefinition = {
+  root: number;
+  bass: number;
+  rootDegree: string;
+  bassDegree: string;
+  quality: string;
+  tones: number[];
+  toneNames: string[];
+};
+export type Question = {
+  id: number;
+  degree: Degree;
+  answer: number;
+  chord?: ChordDefinition;
+};
 
 export const DEFAULT_PREFERENCES: Preferences = {
   tonic: 0,

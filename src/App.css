@@ -551,6 +551,250 @@
   }
 }
 
+.drawer-trigger,
+.drawer-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #61755d;
+}
+.drawer-trigger:hover,
+.drawer-close:hover {
+  background: #eaf0e2;
+}
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #182a2224;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms, visibility 180ms;
+}
+.drawer-backdrop.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+.practice-drawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 280px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px;
+  background: #f7f8f4;
+  border-right: 1px solid #dce5d7;
+  box-shadow: 10px 0 40px #2543310c;
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform 180ms ease-out, visibility 180ms;
+}
+.practice-drawer.is-open {
+  transform: translateX(0);
+  visibility: visible;
+}
+.drawer-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 32px 12px;
+  color: #778371;
+  font-size: 13px;
+}
+.drawer-close {
+  font-size: 26px;
+  font-weight: 400;
+}
+.drawer-entry {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 60px;
+  margin-bottom: 8px;
+  padding: 16px;
+  border-radius: 10px;
+  background: transparent;
+  color: #768270;
+  text-align: left;
+  font-size: 13px;
+}
+.drawer-entry > span:first-child {
+  font: 11px "Manrope", sans-serif;
+  opacity: 0.65;
+}
+.drawer-entry > span:last-child {
+  margin-left: auto;
+}
+.drawer-entry strong {
+  font-weight: 500;
+}
+.drawer-entry:hover {
+  background: #edf2e8;
+}
+.drawer-entry.is-active {
+  background: #e3ecda;
+  color: #31593c;
+}
+.drawer-footnote {
+  margin: auto 16px 4px;
+  color: #a5af9e;
+  font: 10px "Manrope", sans-serif;
+  letter-spacing: 3px;
+}
+.chord-options {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  min-height: 52px;
+}
+.chord-options .toggle-control {
+  font-size: 12px;
+}
+.chord-mode {
+  --piano-width: 1120px;
+  --piano-height: clamp(120px, calc((100vw - 80px) / 22 * 4), 204px);
+}
+.chord-mode .app-header {
+  height: 64px;
+}
+.chord-mode .configuration {
+  margin: 12px 0 4px;
+}
+.chord-mode .chord-options {
+  min-height: 44px;
+}
+.chord-mode .question-track {
+  width: min(100%, 1000px);
+  height: clamp(64px, 10dvh, 128px);
+  --preview-offset: clamp(200px, 26vw, 310px);
+}
+.chord-mode .practice-actions {
+  min-height: 52px;
+}
+.chord-mode .feedback-slot {
+  height: 32px;
+}
+.chord-mode .keyboard-range {
+  margin-bottom: 6px;
+}
+.chord-mode .degree {
+  align-items: center;
+  font-size: clamp(44px, 6dvh, 72px);
+  letter-spacing: -1.5px;
+  padding: 0;
+}
+.chord-symbol {
+  white-space: nowrap;
+}
+.chord-quality {
+  font-size: 0.6em;
+  letter-spacing: -0.5px;
+  margin-left: 2px;
+}
+.chord-bass {
+  font-size: 0.8em;
+  margin-left: 3px;
+}
+.chord-connection {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #819178;
+}
+.connect-chord-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 14px;
+  color: #6b805c;
+  background: transparent;
+  border-radius: 9px;
+}
+.connect-chord-button:hover {
+  background: #eaf0e2;
+}
+.midi-ready {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.midi-ready i {
+  width: 5px;
+  height: 5px;
+  background: #7f9c65;
+  border-radius: 50%;
+}
+.keyboard-range {
+  display: grid;
+  grid-template-columns: repeat(3, 7fr) 1fr;
+  margin-bottom: 9px;
+  font: 10px "Manrope", sans-serif;
+  color: #9ba592;
+}
+.keyboard-range span {
+  padding-left: 6px;
+}
+.chord-piano {
+  pointer-events: none;
+}
+.chord-piano .black-key {
+  left: calc(var(--key-position) * 100% / 22 - 1.3636%);
+  width: 2.7273%;
+}
+.chord-piano .white-key.is-held {
+  background: #dce7e6;
+  box-shadow: inset 0 3px 8px #1d3d2412;
+}
+.chord-piano .black-key.is-held {
+  background: #6f8e85;
+  translate: 0 2px;
+}
+.chord-piano .white-key.is-correct {
+  background: #d8eac9;
+}
+.chord-piano .black-key.is-correct {
+  background: #6c925b;
+}
+.chord-keyboard {
+  transition: opacity 180ms;
+}
+.chord-keyboard.is-disconnected {
+  opacity: 0.55;
+}
+@media (max-height: 680px) {
+  .chord-mode {
+    --piano-height: min(20dvh, calc((100vw - 80px) / 22 * 4));
+  }
+  .chord-mode .app-header {
+    height: 56px;
+  }
+  .chord-mode .question-track {
+    height: 56px;
+  }
+  .chord-mode .configuration {
+    margin-top: 8px;
+  }
+  .chord-mode .feedback-slot {
+    height: 28px;
+  }
+  .chord-mode .degree {
+    font-size: 38px;
+  }
+  .chord-mode .practice-actions {
+    min-height: 44px;
+  }
+}
+
 .is-mobile {
   max-width: 600px;
   padding: 0 20px;

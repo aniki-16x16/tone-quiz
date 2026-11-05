@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { useMidi, useMobileLayout, usePreferences, useTone } from "./hooks.ts";
+import { useChordPreferences, useMidi, useMobileLayout, usePreferences, useTone } from "./hooks.ts";
 import {
   createQuestion,
   DIFFICULTY_NAMES,
@@ -13,6 +13,11 @@ import { NOTE_TIMING } from "./timing.ts";
 import type { Preferences, QuizConfig } from "./music.ts";
 import { practiceReducer, startPractice } from "./practice.ts";
 import { Select, Toggle } from "./components/Controls.tsx";
+import { ChordKeyboard } from "./components/ChordKeyboard.tsx";
+import { PracticeDrawer } from "./components/PracticeDrawer.tsx";
+import { CHORD_LEVELS, createChordQuestion } from "./chords.ts";
+import type { ChordConfig } from "./chords.ts";
+import type { MidiFrame } from "./midi.ts";
 import "./App.css";
 
 const BLACK_POSITIONS: Record<number, number> = {
@@ -27,10 +32,11 @@ function Icon({
   name,
   size = 18,
 }: {
-  name: "sound" | "midi" | "chevron" | "check" | "arrow" | "settings";
+  name: "sound" | "midi" | "chevron" | "check" | "arrow" | "settings" | "menu";
   size?: number;
 }) {
   const paths: Record<typeof name, ReactNode> = {
+    menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     sound: (
       <>
         <path d="m11 5-5 4H3v6h3l5 4z" />
@@ -77,8 +83,16 @@ function Icon({
 
 function App() {
   const mobile = useMobileLayout();
+  const [desktopMode, setDesktopMode] = useState<"note" | "chord">("note");
+  const chordMode = !mobile && desktopMode === "chord";
+  const practiceMode = chordMode ? "chord" : "note";
+  const practiceName = chordMode ? "和弦练习" : "单音练习";
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const [preferences, setPreferences] = usePreferences();
-  const [session, dispatch] = useReducer(
+  const [chordPreferences, setChordPreferences] = useChordPreferences();
+  const config = chordMode ? chordPreferences : preferences;
+  const [noteSession, noteDispatch] = useReducer(
     practiceReducer,
     preferences,
     (config) => {
@@ -86,22 +100,32 @@ function App() {
       return startPractice(question, createQuestion(config, question));
     },
   );
+  const [chordSession, chordDispatch] = useReducer(
+    practiceReducer, chordPreferences, (settings) => {
+      const question = createChordQuestion(settings);
+      return startPractice(question, createChordQuestion(settings, question));
+    },
+  );
+  const session = chordMode ? chordSession : noteSession;
+  const dispatch = chordMode ? chordDispatch : noteDispatch;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const configurationRef = useRef<HTMLElement>(null);
   const [midiOpen, setMidiOpen] = useState(false);
   const [settledErrorToken, setSettledErrorToken] = useState("");
-  const [settledSuccessId, setSettledSuccessId] = useState<number | null>(null);
+  const [settledSuccessToken, setSettledSuccessToken] = useState("");
   const feedbackSequence = useRef(0);
   const [noteFeedback, setNoteFeedback] = useState<{
     pitch: number;
     id: number;
     questionId: number;
   } | null>(null);
-  const { play, prepare, unavailable: audioUnavailable } = useTone();
+  const { play, syncMidi, prepare, unavailable: audioUnavailable } = useTone();
+  const inputQuestionRef = useRef("");
+  const questionToken = `${practiceMode}:${session.question.id}`;
 
   const submit = useCallback(
     (note: number) => {
-      if (session.solved) return;
+      if (chordMode || session.solved) return;
       setNoteFeedback({
         pitch: pitchClass(note),
         id: ++feedbackSequence.current,
@@ -110,41 +134,55 @@ function App() {
       if (preferences.sound) void play(note);
       dispatch({ type: "answer", note });
     },
-    [session.solved, session.question.id, preferences.sound, play],
+    [chordMode, session.solved, session.question.id, preferences.sound, play, dispatch],
   );
-  const midi = useMidi(!mobile, submit);
-  const modeName = MODE_NAMES[preferences.mode];
-  const answerNoteNames = getAnswerNoteNames(preferences);
-  const scaleName = `${NOTE_NAMES[preferences.tonic]} ${modeName}`;
+  const receiveChord = useCallback((frame: MidiFrame) => {
+    if (frame.first) inputQuestionRef.current = questionToken;
+    const currentGesture = inputQuestionRef.current === questionToken;
+    if (!chordMode || !currentGesture || session.solved) {
+      syncMidi([]);
+      return;
+    }
+    syncMidi(preferences.sound ? frame.notes : [], preferences.sound ? frame.noteOn : undefined);
+    dispatch({ type: "chord", notes: frame.notes, noteOn: frame.noteOn, previousId: session.question.id });
+  }, [chordMode, questionToken, session.solved, session.question.id, preferences.sound, syncMidi, dispatch]);
+  const midi = useMidi(!mobile, submit, receiveChord);
+  useEffect(() => {
+    if (!chordMode || !midi.connected || !preferences.sound) syncMidi([]);
+  }, [chordMode, midi.connected, preferences.sound, syncMidi]);
+  const modeName = MODE_NAMES[config.mode];
+  const answerNoteNames = getAnswerNoteNames(config);
+  const scaleName = `${NOTE_NAMES[config.tonic]} ${modeName}`;
   const accuracy = session.total
     ? Math.round((session.correct / session.total) * 100)
     : null;
-  const errorToken = `${session.question.id}:${session.errors}`;
+  const errorToken = `${questionToken}:${session.errors}`;
   const wrongAnimation =
     !session.solved &&
     session.attempts > 0 &&
     session.errors > 0 &&
     errorToken !== settledErrorToken;
   const successAnimation =
-    session.solved && settledSuccessId !== session.question.id;
+    session.solved && settledSuccessToken !== questionToken;
 
   const advance = useCallback(() => {
     if (midi.held) return;
     dispatch({
       type: "next",
       previousId: session.question.id,
-      nextQuestion: createQuestion(preferences, session.nextQuestion),
+      nextQuestion: chordMode ? createChordQuestion(chordPreferences, session.nextQuestion)
+        : createQuestion(preferences, session.nextQuestion),
     });
-  }, [midi.held, session.question.id, session.nextQuestion, preferences]);
+  }, [midi.held, session.question.id, session.nextQuestion, preferences, chordPreferences, chordMode, dispatch]);
 
   useEffect(() => {
     if (!session.solved) return;
     const timer = window.setTimeout(
-      () => setSettledSuccessId(session.question.id),
+      () => setSettledSuccessToken(questionToken),
       NOTE_TIMING.answerMs,
     );
     return () => window.clearTimeout(timer);
-  }, [session.solved, session.question.id]);
+  }, [session.solved, questionToken]);
 
   useEffect(() => {
     if (
@@ -197,6 +235,10 @@ function App() {
   }, [mobile, settingsOpen]);
 
   function updateConfig(patch: Partial<QuizConfig>) {
+    if (chordMode) {
+      updateChordConfig(patch as Partial<ChordConfig>);
+      return;
+    }
     const next = { ...preferences, ...patch };
     setPreferences(next);
     const question = createQuestion(next, session.question);
@@ -205,6 +247,18 @@ function App() {
       question,
       nextQuestion: createQuestion(next, question),
     });
+  }
+
+  function updateChordConfig(patch: Partial<ChordConfig>) {
+    const next = { ...chordPreferences, ...patch };
+    setChordPreferences(next);
+    const question = createChordQuestion(next, chordSession.question);
+    chordDispatch({ type: "restart", question, nextQuestion: createChordQuestion(next, question) });
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    drawerTriggerRef.current?.focus({ preventScroll: true });
   }
 
   function updatePreference(key: "autoAdvance" | "sound", value: boolean) {
@@ -234,7 +288,7 @@ function App() {
 
   return (
     <div
-      className={`app-shell ${mobile ? "is-mobile" : ""}`}
+      className={`app-shell ${mobile ? "is-mobile" : ""} ${chordMode ? "chord-mode" : ""}`}
       style={
         {
           "--note-feedback-duration": `${NOTE_TIMING.feedbackMs}ms`,
@@ -244,6 +298,12 @@ function App() {
       }
     >
       <header className="app-header">
+        {!mobile && (
+          <button ref={drawerTriggerRef} className="drawer-trigger" aria-label="选择练习类型"
+            aria-expanded={drawerOpen} aria-controls="practice-drawer" onClick={() => setDrawerOpen(!drawerOpen)}>
+            <Icon name="menu" size={20} />
+          </button>
+        )}
         <a className="brand" href="./" aria-label="音题 Tone Quiz 首页">
           <span className="brand-mark" aria-hidden="true">
             <i />
@@ -256,7 +316,7 @@ function App() {
         </a>
         <span className="practice-tag">
           <span />
-          单音练习
+          {practiceName}
         </span>
         {!mobile && (
           <div className="midi-control">
@@ -335,7 +395,10 @@ function App() {
         )}
       </header>
 
-      <main>
+      {!mobile && <PracticeDrawer open={drawerOpen} active={practiceMode}
+        onClose={closeDrawer} onSelect={mode => { setDesktopMode(mode); closeDrawer(); }} />}
+
+      <main inert={!mobile && drawerOpen}>
         <section
           ref={configurationRef}
           className={`configuration ${settingsOpen ? "is-open" : ""}`}
@@ -360,7 +423,7 @@ function App() {
           >
             <Select
               label="主音"
-              value={String(preferences.tonic)}
+              value={String(config.tonic)}
               grid
               onChange={(value) => updateConfig({ tonic: Number(value) })}
               options={NOTE_NAMES.map((name, pitch) => ({
@@ -370,7 +433,7 @@ function App() {
             />
             <Select
               label="调性"
-              value={preferences.mode}
+              value={config.mode}
               onChange={(value) =>
                 updateConfig({ mode: value as QuizConfig["mode"] })
               }
@@ -379,7 +442,9 @@ function App() {
                 { value: "minor", label: "自然小调" },
               ]}
             />
-            <Select
+            {chordMode ? <Select label="题目范围" value={chordPreferences.level}
+              onChange={value => updateChordConfig({ level: value as ChordConfig["level"] })}
+              options={Object.entries(CHORD_LEVELS).map(([value, label]) => ({ value, label }))} /> : <Select
               label="题目范围"
               value={preferences.difficulty}
               onChange={(value) =>
@@ -389,13 +454,23 @@ function App() {
                 { value: "diatonic", label: "基础 · 调内音" },
                 { value: "chromatic", label: "进阶 · 加入调外音" },
               ]}
-            />
+            />}
           </div>
+          {chordMode && chordPreferences.level !== "diatonic" && (
+            <div className="chord-options">
+              <Toggle kind="checkbox" label="调外根音" checked={chordPreferences.includeChromaticRoots}
+                onChange={includeChromaticRoots => updateChordConfig({ includeChromaticRoots })} />
+              <Toggle kind="checkbox" label="挂留／add／六和弦" checked={chordPreferences.includeColors}
+                onChange={includeColors => updateChordConfig({ includeColors })} />
+              <Toggle kind="checkbox" label="转位／斜线和弦" checked={chordPreferences.includeSlash}
+                onChange={includeSlash => updateChordConfig({ includeSlash })} />
+            </div>
+          )}
         </section>
 
         <section
           className={`practice ${midi.connected ? "midi-active" : ""}`}
-          aria-label="单音练习"
+          aria-label={practiceName}
         >
           <div className="practice-topline">
             <div className="statistics" aria-label="本轮统计">
@@ -419,7 +494,7 @@ function App() {
                 className="listen-button"
                 disabled={audioUnavailable}
                 onClick={() => {
-                  void play(preferences.tonic);
+                  void play(config.tonic);
                 }}
               >
                 <Icon name="sound" size={16} />
@@ -437,10 +512,15 @@ function App() {
                     key={index === 0 ? session.errors : "preview"}
                     className={`degree ${index === 0 && wrongAnimation ? "wrong-animation" : ""} ${index === 0 && session.solved ? "solved" : ""} ${index === 0 && successAnimation ? "correct-animation" : ""}`}
                   >
-                    <span className="degree-accidental">
+                    {!chordMode && <span className="degree-accidental">
                       {question.degree.label.match(/^[♭♯]/)?.[0]}
-                    </span>
-                    <span>{question.degree.label.replace(/^[♭♯]/, "")}</span>
+                    </span>}
+                    {chordMode ? <span className="chord-symbol">
+                      {question.chord?.rootDegree}
+                      <span className="chord-quality">{question.chord?.quality}</span>
+                      {question.chord && question.chord.bass !== question.chord.root &&
+                        <span className="chord-bass">/{question.chord.bassDegree}</span>}
+                    </span> : <span>{question.degree.label.replace(/^[♭♯]/, "")}</span>}
                   </div>
                 </div>
               ))}
@@ -454,13 +534,14 @@ function App() {
                 <div className="success-feedback">
                   <Icon name="check" size={17} />
                   <span>
-                    {answerNoteNames[preferences.tonic]} →{" "}
+                    {session.question.chord ? session.question.chord.toneNames.join(" · ") : <>
+                    {answerNoteNames[config.tonic]} →{" "}
                     <strong>{answerNoteNames[session.question.answer]}</strong>
                     <span className="feedback-divider">·</span>
                     {session.question.degree.label}
                     <span className="feedback-interval">
                       ，{session.question.degree.interval}
-                    </span>
+                    </span></>}
                   </span>
                 </div>
               )}
@@ -503,7 +584,15 @@ function App() {
                 onChange={(value) => updatePreference("sound", value)}
               />
             </div>
-            {mobile ? (
+            {chordMode ? <>
+              <div className="chord-connection" role="status">
+                {!midi.connected ? <button className="connect-chord-button" onClick={() => setMidiOpen(true)}>
+                  <Icon name="midi" size={17} />连接 MIDI 键盘后作答<Icon name="arrow" size={16} />
+                </button> : <span className="midi-ready"><i />MIDI 已连接</span>}
+              </div>
+              <ChordKeyboard connected={midi.connected} held={midi.notes} solved={session.solved}
+                wrongPitch={wrongAnimation ? session.lastAnswer : null} />
+            </> : mobile ? (
               <div className="note-grid" aria-label="选择音名">
                 {answerNoteNames.map((name, pitch) => (
                   <button

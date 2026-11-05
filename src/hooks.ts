@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MidiNoteGate, parseMidiNote } from "./midi.ts";
+import type { MidiFrame } from "./midi.ts";
+import { DEFAULT_CHORD_CONFIG, parseChordConfig } from "./chords.ts";
+import type { ChordConfig } from "./chords.ts";
 import { createMelodyVoice } from "./audio.ts";
 import type { ToneVoice } from "./audio.ts";
 import { DEFAULT_PREFERENCES, parsePreferences } from "./music.ts";
@@ -44,6 +47,8 @@ export function usePreferences() {
 export function useTone() {
   const contextRef = useRef<AudioContext | null>(null);
   const voiceRef = useRef<ToneVoice | null>(null);
+  const midiVoices = useRef(new Map<number, ToneVoice>());
+  const midiNotes = useRef<readonly number[]>([]);
   const [unavailable, setUnavailable] = useState(false);
   const prepare = useCallback(async () => {
     try {
@@ -65,27 +70,64 @@ export function useTone() {
     },
     [prepare],
   );
+  const syncMidi = useCallback((notes: readonly number[], noteOn?: number) => {
+    midiNotes.current = notes;
+    for (const [note, voice] of midiVoices.current) {
+      if (!notes.includes(note)) {
+        voice.release();
+        midiVoices.current.delete(note);
+      }
+    }
+    if (noteOn === undefined) return;
+    void prepare().then(context => {
+      if (!context || context.state !== "running" || !midiNotes.current.includes(noteOn)) return;
+      midiVoices.current.get(noteOn)?.release();
+      midiVoices.current.set(noteOn, createMelodyVoice(context, noteOn, true));
+    });
+  }, [prepare]);
   useEffect(
     () => () => {
       voiceRef.current?.release();
       voiceRef.current = null;
+      midiNotes.current = [];
+      for (const voice of midiVoices.current.values()) voice.release();
+      midiVoices.current.clear();
       void contextRef.current?.close();
       contextRef.current = null;
     },
     [],
   );
-  return { play, prepare, unavailable };
+  return { play, syncMidi, prepare, unavailable };
 }
 
-export function useMidi(enabled: boolean, onNote: (note: number) => void) {
+export function useChordPreferences() {
+  const [config, setConfig] = useState<ChordConfig>(() => {
+    try {
+      return parseChordConfig(JSON.parse(localStorage.getItem("tone-quiz.chords.v1") ?? "null"));
+    } catch { return { ...DEFAULT_CHORD_CONFIG }; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("tone-quiz.chords.v1", JSON.stringify(config)); }
+    catch { /* Practice also works when browser storage is unavailable. */ }
+  }, [config]);
+  return [config, setConfig] as const;
+}
+
+export function useMidi(
+  enabled: boolean,
+  onNote: (note: number) => void,
+  onFrame?: (frame: MidiFrame) => void,
+) {
   const [access, setAccess] = useState<MIDIAccess | null>(null);
   const [inputs, setInputs] = useState<MIDIInput[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
-  const [held, setHeld] = useState(false);
+  const [notes, setNotes] = useState<number[]>([]);
+  const [openedId, setOpenedId] = useState("");
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const noteRef = useRef(onNote);
+  const frameRef = useRef(onFrame);
   const requestRef = useRef(0);
   const supported =
     typeof navigator.requestMIDIAccess === "function" && window.isSecureContext;
@@ -93,7 +135,8 @@ export function useMidi(enabled: boolean, onNote: (note: number) => void) {
 
   useEffect(() => {
     noteRef.current = onNote;
-  }, [onNote]);
+    frameRef.current = onFrame;
+  }, [onNote, onFrame]);
   useEffect(
     () => () => {
       requestRef.current++;
@@ -151,18 +194,31 @@ export function useMidi(enabled: boolean, onNote: (note: number) => void) {
     const input = selectedInput;
     if (!input || input.state !== "connected") return;
     const gate = new MidiNoteGate();
+    const lifecycle = { ready: false, disposed: false };
     const receive = (event: MIDIMessageEvent) => {
-      if (!event.data) return;
+      if (!lifecycle.ready || !event.data) return;
       const message = parseMidiNote(event.data);
       if (!message) return;
       const result = gate.receive(message);
-      setHeld(result.held);
+      const heldNotes = gate.notes;
+      setNotes(heldNotes);
+      frameRef.current?.({ notes: heldNotes, first: result.submit,
+        noteOn: message.kind === "on" ? message.note : undefined });
       if (result.submit) noteRef.current(message.note);
     };
     input.addEventListener("midimessage", receive);
-    void input.open().catch(() => setError("设备无法打开，请重新连接后重试。"));
+    void input.open().then(() => {
+      if (lifecycle.disposed) return;
+      lifecycle.ready = true;
+      setOpenedId(input.id);
+    }).catch(() => {
+      if (!lifecycle.disposed) setError("设备无法打开，请重新连接后重试。");
+    });
     return () => {
-      setHeld(false);
+      lifecycle.disposed = true;
+      lifecycle.ready = false;
+      setNotes([]);
+      setOpenedId("");
       input.removeEventListener("midimessage", receive);
       void input.close().catch(() => {});
     };
@@ -179,9 +235,10 @@ export function useMidi(enabled: boolean, onNote: (note: number) => void) {
       setError("");
       setSelectedId(id);
     },
-    held: enabled && held,
+    held: enabled && notes.length > 0,
+    notes: enabled ? notes : [],
     authorized: access !== null,
     connected:
-      enabled && !error && inputs.some((input) => input.id === selectedId),
+      enabled && !error && openedId === selectedId && inputs.some((input) => input.id === selectedId),
   };
 }

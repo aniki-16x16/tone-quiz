@@ -8,10 +8,13 @@ export type ToneVoice = { release: () => void };
 export function createMelodyVoice(
   context: BaseAudioContext,
   pitch: number,
+  midi = false,
 ): ToneVoice {
   const now = context.currentTime;
-  const frequency = 440 * 2 ** ((60 + pitchClass(pitch) - 69) / 12);
+  const frequency = 440 * 2 ** (((midi ? pitch : 60 + pitchClass(pitch)) - 69) / 12);
   const output = context.createGain();
+  const level = midi ? 0.4 : 1;
+  output.gain.value = level;
   output.connect(context.destination);
   const envelope = context.createGain();
   const motion = context.createGain();
@@ -92,7 +95,7 @@ export function createMelodyVoice(
       released = true;
       const at = context.currentTime;
       // Keep a short release between notes instead of abruptly cutting the body.
-      output.gain.setValueAtTime(1, at);
+      output.gain.setValueAtTime(level, at);
       output.gain.linearRampToValueAtTime(0, at + NOTE_TIMING.retriggerRelease);
       for (const oscillator of oscillators)
         oscillator.stop(at + NOTE_TIMING.retriggerRelease + 0.01);
