@@ -15,20 +15,6 @@ import { practiceReducer, startPractice } from "./practice.ts";
 import { Select, Toggle } from "./components/Controls.tsx";
 import "./App.css";
 
-const KEY_CODES = [
-  "KeyA",
-  "KeyW",
-  "KeyS",
-  "KeyE",
-  "KeyD",
-  "KeyF",
-  "KeyT",
-  "KeyG",
-  "KeyY",
-  "KeyH",
-  "KeyU",
-  "KeyJ",
-];
 const BLACK_POSITIONS: Record<number, number> = {
   1: 1,
   3: 2,
@@ -105,7 +91,6 @@ function App() {
   const [midiOpen, setMidiOpen] = useState(false);
   const [settledErrorToken, setSettledErrorToken] = useState("");
   const [settledSuccessId, setSettledSuccessId] = useState<number | null>(null);
-  const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const feedbackSequence = useRef(0);
   const [noteFeedback, setNoteFeedback] = useState<{
     pitch: number;
@@ -190,42 +175,6 @@ function App() {
   }, [noteFeedback]);
 
   useEffect(() => {
-    if (mobile) return;
-    const keydown = (event: KeyboardEvent) => {
-      if (event.repeat || event.ctrlKey || event.altKey || event.metaKey)
-        return;
-      if (
-        event.target instanceof HTMLElement &&
-        event.target.closest(
-          'input,select,textarea,[contenteditable="true"],[data-quiz-control]',
-        )
-      )
-        return;
-      const pitch = KEY_CODES.indexOf(event.code);
-      if (pitch < 0) return;
-      event.preventDefault();
-      setPressedKeys((previous) => new Set(previous).add(event.code));
-      submit(pitch);
-    };
-    const keyup = (event: KeyboardEvent) =>
-      setPressedKeys((previous) => {
-        if (!previous.has(event.code)) return previous;
-        const next = new Set(previous);
-        next.delete(event.code);
-        return next;
-      });
-    const blur = () => setPressedKeys(new Set());
-    window.addEventListener("keydown", keydown);
-    window.addEventListener("keyup", keyup);
-    window.addEventListener("blur", blur);
-    return () => {
-      window.removeEventListener("keydown", keydown);
-      window.removeEventListener("keyup", keyup);
-      window.removeEventListener("blur", blur);
-    };
-  }, [mobile, submit]);
-
-  useEffect(() => {
     if (!mobile || !settingsOpen) return;
     const outside = (event: PointerEvent) => {
       if (!(event.target instanceof Element)) return;
@@ -266,7 +215,6 @@ function App() {
     return [
       session.solved && session.lastAnswer === pitch ? "is-correct" : "",
       wrongAnimation && session.lastAnswer === pitch ? "is-wrong" : "",
-      pressedKeys.has(KEY_CODES[pitch]) ? "is-pressed" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -578,11 +526,9 @@ function App() {
                       key={pitch}
                       className={`piano-key white-key ${answerClass(pitch)}`}
                       disabled={session.solved}
-                      aria-label={`回答 ${answerNoteNames[pitch]}，快捷键 ${KEY_CODES[pitch].slice(3)}`}
+                      aria-label={`回答 ${answerNoteNames[pitch]}`}
                       onClick={() => submit(pitch)}
                     >
-                      <span>{answerNoteNames[pitch]}</span>
-                      <kbd>{KEY_CODES[pitch].slice(3)}</kbd>
                       {renderNoteFeedback(pitch)}
                     </button>
                   ))}
@@ -596,11 +542,9 @@ function App() {
                         style={{ "--key-position": position } as CSSProperties}
                         className={`piano-key black-key ${answerClass(pitch)}`}
                         disabled={session.solved}
-                        aria-label={`回答 ${answerNoteNames[pitch]}，快捷键 ${KEY_CODES[pitch].slice(3)}`}
+                        aria-label={`回答 ${answerNoteNames[pitch]}`}
                         onClick={() => submit(pitch)}
                       >
-                        <span>{answerNoteNames[pitch]}</span>
-                        <kbd>{KEY_CODES[pitch].slice(3)}</kbd>
                         {renderNoteFeedback(pitch)}
                       </button>
                     );
