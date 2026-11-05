@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MidiNoteGate, parseMidiNote } from "./midi.ts";
-import { DEFAULT_PREFERENCES, parsePreferences, pitchClass } from "./music.ts";
+import { createMelodyVoice } from "./audio.ts";
+import type { ToneVoice } from "./audio.ts";
+import { DEFAULT_PREFERENCES, parsePreferences } from "./music.ts";
 import type { Preferences } from "./music.ts";
 
 const STORAGE_KEY = "tone-quiz.preferences.v1";
@@ -41,6 +43,7 @@ export function usePreferences() {
 
 export function useTone() {
   const contextRef = useRef<AudioContext | null>(null);
+  const voiceRef = useRef<ToneVoice | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const prepare = useCallback(async () => {
     try {
@@ -57,28 +60,15 @@ export function useTone() {
     async (pitch: number) => {
       const context = await prepare();
       if (!context || context.state !== "running") return;
-      const now = context.currentTime;
-      const frequency = 440 * 2 ** ((60 + pitchClass(pitch) - 69) / 12);
-      const gain = context.createGain();
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.2, now + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
-      gain.connect(context.destination);
-      const oscillator = context.createOscillator();
-      oscillator.type = "triangle";
-      oscillator.frequency.value = frequency;
-      oscillator.connect(gain);
-      oscillator.start(now);
-      oscillator.stop(now + 0.67);
-      oscillator.onended = () => {
-        oscillator.disconnect();
-        gain.disconnect();
-      };
+      voiceRef.current?.release();
+      voiceRef.current = createMelodyVoice(context, pitch);
     },
     [prepare],
   );
   useEffect(
     () => () => {
+      voiceRef.current?.release();
+      voiceRef.current = null;
       void contextRef.current?.close();
       contextRef.current = null;
     },

@@ -6,7 +6,9 @@ import {
   DIFFICULTY_NAMES,
   MODE_NAMES,
   NOTE_NAMES,
+  pitchClass,
 } from "./music.ts";
+import { NOTE_TIMING } from "./timing.ts";
 import type { Preferences, QuizConfig } from "./music.ts";
 import { practiceReducer, startPractice } from "./practice.ts";
 import { Select, Toggle } from "./components/Controls.tsx";
@@ -99,15 +101,26 @@ function App() {
   const [midiOpen, setMidiOpen] = useState(false);
   const [settledErrorToken, setSettledErrorToken] = useState("");
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+  const feedbackSequence = useRef(0);
+  const [noteFeedback, setNoteFeedback] = useState<{
+    pitch: number;
+    id: number;
+    questionId: number;
+  } | null>(null);
   const { play, prepare, unavailable: audioUnavailable } = useTone();
 
   const submit = useCallback(
     (note: number) => {
       if (session.solved) return;
+      setNoteFeedback({
+        pitch: pitchClass(note),
+        id: ++feedbackSequence.current,
+        questionId: session.question.id,
+      });
       if (preferences.sound) void play(note);
       dispatch({ type: "answer", note });
     },
-    [session.solved, preferences.sound, play],
+    [session.solved, session.question.id, preferences.sound, play],
   );
   const midi = useMidi(!mobile, submit);
   const modeName = MODE_NAMES[preferences.mode];
@@ -133,7 +146,7 @@ function App() {
 
   useEffect(() => {
     if (!session.solved || !preferences.autoAdvance || midi.held) return;
-    const timer = window.setTimeout(advance, 550);
+    const timer = window.setTimeout(advance, NOTE_TIMING.advanceMs);
     return () => window.clearTimeout(timer);
   }, [session.solved, preferences.autoAdvance, midi.held, advance]);
 
@@ -141,10 +154,19 @@ function App() {
     if (!session.errors) return;
     const timer = window.setTimeout(
       () => setSettledErrorToken(errorToken),
-      200,
+      NOTE_TIMING.errorMs,
     );
     return () => window.clearTimeout(timer);
   }, [session.errors, errorToken]);
+
+  useEffect(() => {
+    if (!noteFeedback) return;
+    const timer = window.setTimeout(
+      () => setNoteFeedback(null),
+      NOTE_TIMING.feedbackMs,
+    );
+    return () => window.clearTimeout(timer);
+  }, [noteFeedback]);
 
   useEffect(() => {
     if (mobile) return;
@@ -227,8 +249,28 @@ function App() {
       .join(" ");
   }
 
+  function renderNoteFeedback(pitch: number) {
+    if (
+      !noteFeedback ||
+      noteFeedback.pitch !== pitch ||
+      noteFeedback.questionId !== session.question.id
+    )
+      return null;
+    return (
+      <span key={noteFeedback.id} className="key-feedback" aria-hidden="true" />
+    );
+  }
+
   return (
-    <div className={`app-shell ${mobile ? "is-mobile" : ""}`}>
+    <div
+      className={`app-shell ${mobile ? "is-mobile" : ""}`}
+      style={
+        {
+          "--note-feedback-duration": `${NOTE_TIMING.feedbackMs}ms`,
+          "--error-feedback-duration": `${NOTE_TIMING.errorMs}ms`,
+        } as CSSProperties
+      }
+    >
       <header className="app-header">
         <a className="brand" href="./" aria-label="音题 Tone Quiz 首页">
           <span className="brand-mark" aria-hidden="true">
@@ -491,6 +533,7 @@ function App() {
                     onClick={() => submit(pitch)}
                   >
                     {name}
+                    {renderNoteFeedback(pitch)}
                   </button>
                 ))}
               </div>
@@ -507,6 +550,7 @@ function App() {
                     >
                       <span>{NOTE_NAMES[pitch]}</span>
                       <kbd>{KEY_CODES[pitch].slice(3)}</kbd>
+                      {renderNoteFeedback(pitch)}
                     </button>
                   ))}
                 </div>
@@ -524,6 +568,7 @@ function App() {
                       >
                         <span>{NOTE_NAMES[pitch]}</span>
                         <kbd>{KEY_CODES[pitch].slice(3)}</kbd>
+                        {renderNoteFeedback(pitch)}
                       </button>
                     );
                   },
