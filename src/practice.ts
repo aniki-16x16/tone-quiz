@@ -3,6 +3,7 @@ import type { Question } from "./music.ts";
 
 export type PracticeState = {
   question: Question;
+  nextQuestion: Question;
   attempts: number;
   solved: boolean;
   lastAnswer: number | null;
@@ -13,12 +14,16 @@ export type PracticeState = {
 };
 export type PracticeAction =
   | { type: "answer"; note: number }
-  | { type: "next"; question: Question; previousId: number }
-  | { type: "restart"; question: Question };
+  | { type: "next"; nextQuestion: Question; previousId: number }
+  | { type: "restart"; question: Question; nextQuestion: Question };
 
-export function startPractice(question: Question): PracticeState {
+export function startPractice(
+  question: Question,
+  nextQuestion: Question,
+): PracticeState {
   return {
     question,
+    nextQuestion,
     attempts: 0,
     solved: false,
     lastAnswer: null,
@@ -33,12 +38,14 @@ export function practiceReducer(
   state: PracticeState,
   action: PracticeAction,
 ): PracticeState {
-  if (action.type === "restart") return startPractice(action.question);
+  if (action.type === "restart")
+    return startPractice(action.question, action.nextQuestion);
   if (action.type === "next") {
     if (!state.solved || action.previousId !== state.question.id) return state;
     return {
       ...state,
-      question: action.question,
+      question: state.nextQuestion,
+      nextQuestion: action.nextQuestion,
       attempts: 0,
       solved: false,
       lastAnswer: null,

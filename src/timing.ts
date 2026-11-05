@@ -7,6 +7,6 @@ export const NOTE_TIMING = {
   end: 1.7,
   retriggerRelease: 0.08,
   feedbackMs: 1200,
-  advanceMs: 500,
-  errorMs: 260,
+  answerMs: 260,
+  transitionMs: 180,
 } as const;

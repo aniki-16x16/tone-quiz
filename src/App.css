@@ -247,11 +247,39 @@
 .listen-button:disabled {
   opacity: 0.5;
 }
+.question-track {
+  --preview-offset: clamp(104px, 22vw, 210px);
+  position: relative;
+  width: min(100%, 640px);
+  height: clamp(120px, 17dvh, 190px);
+  isolation: isolate;
+  overflow: clip;
+}
+.question-card {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition:
+    transform var(--question-transition-duration) cubic-bezier(0.2, 0.7, 0.3, 1),
+    opacity var(--question-transition-duration) ease-out;
+}
+.question-current {
+  transform: translateX(0) scale(1);
+  opacity: 1;
+  z-index: 1;
+}
+.question-preview {
+  transform: translateX(var(--preview-offset)) scale(0.48);
+  opacity: 0.3;
+}
+.question-preview .degree {
+  animation: preview-in var(--question-transition-duration) ease-out;
+}
 .degree {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  height: clamp(120px, 17dvh, 190px);
+  height: 100%;
   margin: 0;
   padding-right: 8px;
   font:
@@ -452,10 +480,13 @@
 }
 .piano-key.is-wrong,
 .note-pad.is-wrong {
-  animation: wrong-key var(--error-feedback-duration) ease-out;
+  animation: wrong-key var(--answer-feedback-duration) ease-out;
 }
 .degree.wrong-animation {
-  animation: wrong-question var(--error-feedback-duration) ease-out;
+  animation: wrong-question var(--answer-feedback-duration) ease-out;
+}
+.degree.correct-animation {
+  animation: correct-question var(--answer-feedback-duration) ease-out;
 }
 .key-feedback {
   position: absolute;
@@ -498,6 +529,23 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+@keyframes preview-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes correct-question {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.06);
   }
 }
 @keyframes wrong-question {
@@ -639,8 +687,10 @@
 .is-mobile .listen-button {
   font-size: 12px;
 }
-.is-mobile .degree {
+.is-mobile .question-track {
   height: clamp(104px, 17dvh, 150px);
+}
+.is-mobile .degree {
   font-size: clamp(88px, 14dvh, 126px);
   letter-spacing: -6px;
   padding-right: 6px;
@@ -729,8 +779,10 @@
   .is-mobile .mobile-settings-trigger {
     min-height: 44px;
   }
-  .is-mobile .degree {
+  .is-mobile .question-track {
     height: 84px;
+  }
+  .is-mobile .degree {
     font-size: 76px;
   }
   .is-mobile .note-pad {

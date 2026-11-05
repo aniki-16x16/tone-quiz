@@ -16,6 +16,11 @@ const question = {
   degree: { label: "♭3", semitones: 3, interval: "小三度" },
   answer: 3,
 };
+const preview = {
+  id: 2,
+  degree: { label: "5", semitones: 7, interval: "纯五度" },
+  answer: 7,
+};
 const answer = (state, note) =>
   practiceReducer(state, { type: "answer", note });
 
@@ -89,7 +94,7 @@ test("altered prompts retain sharp extensions while answers ignore their octave"
   assert.equal(sharp11.semitones, 18);
   for (const note of [3, 15, 27, 39, 51, 63, 75, 87, 99, 111, 123]) {
     assert.equal(
-      answer(startPractice({ ...question, degree: sharp9 }), note).solved,
+      answer(startPractice({ ...question, degree: sharp9 }, preview), note).solved,
       true,
     );
   }
@@ -127,9 +132,10 @@ test("question generation transposes correctly and never repeats the previous an
 });
 
 test("a wrong answer stays on the question; retries do not repair first-attempt statistics", () => {
-  let state = startPractice(question);
+  let state = startPractice(question, preview);
   state = answer(state, 4);
   assert.equal(state.question, question);
+  assert.equal(state.nextQuestion, preview);
   assert.equal(state.solved, false);
   assert.equal(state.total, 1);
   assert.equal(state.correct, 0);
@@ -140,10 +146,11 @@ test("a wrong answer stays on the question; retries do not repair first-attempt 
   assert.equal(state.correct, 0);
   assert.equal(state.errors, 2);
   assert.equal(state.streak, 0);
+  assert.equal(state.nextQuestion, preview);
 });
 
 test("completed questions ignore duplicate inputs and count one first-attempt success", () => {
-  const state = answer(startPractice(question), 63);
+  const state = answer(startPractice(question, preview), 63);
   assert.equal(state.correct, 1);
   assert.equal(state.streak, 1);
   assert.equal(answer(state, 3), state);
@@ -151,13 +158,14 @@ test("completed questions ignore duplicate inputs and count one first-attempt su
 });
 
 test("only solved questions advance and stale advance actions cannot skip a question", () => {
-  const initial = startPractice(question);
-  const nextQuestion = { ...question, id: 2, answer: 7 };
-  const next = { type: "next", question: nextQuestion, previousId: 1 };
+  const initial = startPractice(question, preview);
+  const nextPreview = { ...question, id: 3 };
+  const next = { type: "next", nextQuestion: nextPreview, previousId: 1 };
   assert.equal(practiceReducer(initial, next), initial);
   const solved = answer(initial, 3);
   const advanced = practiceReducer(solved, next);
-  assert.equal(advanced.question, nextQuestion);
+  assert.equal(advanced.question, preview);
+  assert.equal(advanced.nextQuestion, nextPreview);
   assert.equal(advanced.attempts, 0);
   assert.equal(advanced.total, 1);
   const secondSolved = answer(advanced, 7);
@@ -165,14 +173,19 @@ test("only solved questions advance and stale advance actions cannot skip a ques
 });
 
 test("changing quiz settings starts a fresh session", () => {
-  const state = practiceReducer(answer(startPractice(question), 4), {
+  const replacement = { ...question, id: 3 };
+  const replacementPreview = { ...preview, id: 4 };
+  const state = practiceReducer(answer(startPractice(question, preview), 4), {
     type: "restart",
-    question: { ...question, id: 2 },
+    question: replacement,
+    nextQuestion: replacementPreview,
   });
   assert.equal(state.total, 0);
   assert.equal(state.attempts, 0);
   assert.equal(state.errors, 0);
   assert.equal(state.solved, false);
+  assert.equal(state.question, replacement);
+  assert.equal(state.nextQuestion, replacementPreview);
 });
 
 test("stored preferences are validated rather than allowing invalid keys or types", () => {

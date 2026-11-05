@@ -95,12 +95,16 @@ function App() {
   const [session, dispatch] = useReducer(
     practiceReducer,
     preferences,
-    (config) => startPractice(createQuestion(config)),
+    (config) => {
+      const question = createQuestion(config);
+      return startPractice(question, createQuestion(config, question));
+    },
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const configurationRef = useRef<HTMLElement>(null);
   const [midiOpen, setMidiOpen] = useState(false);
   const [settledErrorToken, setSettledErrorToken] = useState("");
+  const [settledSuccessId, setSettledSuccessId] = useState<number | null>(null);
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const feedbackSequence = useRef(0);
   const [noteFeedback, setNoteFeedback] = useState<{
@@ -136,27 +140,42 @@ function App() {
     session.attempts > 0 &&
     session.errors > 0 &&
     errorToken !== settledErrorToken;
+  const successAnimation =
+    session.solved && settledSuccessId !== session.question.id;
 
   const advance = useCallback(() => {
     if (midi.held) return;
     dispatch({
       type: "next",
       previousId: session.question.id,
-      question: createQuestion(preferences, session.question),
+      nextQuestion: createQuestion(preferences, session.nextQuestion),
     });
-  }, [midi.held, session.question, preferences]);
+  }, [midi.held, session.question.id, session.nextQuestion, preferences]);
 
   useEffect(() => {
-    if (!session.solved || !preferences.autoAdvance || midi.held) return;
-    const timer = window.setTimeout(advance, NOTE_TIMING.advanceMs);
+    if (!session.solved) return;
+    const timer = window.setTimeout(
+      () => setSettledSuccessId(session.question.id),
+      NOTE_TIMING.answerMs,
+    );
     return () => window.clearTimeout(timer);
-  }, [session.solved, preferences.autoAdvance, midi.held, advance]);
+  }, [session.solved, session.question.id]);
+
+  useEffect(() => {
+    if (
+      session.solved &&
+      !successAnimation &&
+      preferences.autoAdvance &&
+      !midi.held
+    )
+      advance();
+  }, [session.solved, successAnimation, preferences.autoAdvance, midi.held, advance]);
 
   useEffect(() => {
     if (!session.errors) return;
     const timer = window.setTimeout(
       () => setSettledErrorToken(errorToken),
-      NOTE_TIMING.errorMs,
+      NOTE_TIMING.answerMs,
     );
     return () => window.clearTimeout(timer);
   }, [session.errors, errorToken]);
@@ -231,9 +250,11 @@ function App() {
   function updateConfig(patch: Partial<QuizConfig>) {
     const next = { ...preferences, ...patch };
     setPreferences(next);
+    const question = createQuestion(next, session.question);
     dispatch({
       type: "restart",
-      question: createQuestion(next, session.question),
+      question,
+      nextQuestion: createQuestion(next, question),
     });
   }
 
@@ -269,7 +290,8 @@ function App() {
       style={
         {
           "--note-feedback-duration": `${NOTE_TIMING.feedbackMs}ms`,
-          "--error-feedback-duration": `${NOTE_TIMING.errorMs}ms`,
+          "--answer-feedback-duration": `${NOTE_TIMING.answerMs}ms`,
+          "--question-transition-duration": `${NOTE_TIMING.transitionMs}ms`,
         } as CSSProperties
       }
     >
@@ -456,15 +478,24 @@ function App() {
                 {audioUnavailable ? "声音不可用" : "听主音"}
               </button>
             </div>
-            <div
-              key={`${session.question.id}-${session.errors}`}
-              className={`degree ${wrongAnimation ? "wrong-animation" : ""} ${session.solved ? "solved" : ""}`}
-              aria-label={`当前题目：${session.question.degree.label}`}
-            >
-              <span className="degree-accidental">
-                {session.question.degree.label.match(/^[♭♯]/)?.[0]}
-              </span>
-              <span>{session.question.degree.label.replace(/^[♭♯]/, "")}</span>
+            <div className="question-track">
+              {[session.question, session.nextQuestion].map((question, index) => (
+                <div
+                  key={question.id}
+                  className={`question-card ${index === 0 ? "question-current" : "question-preview"}`}
+                  aria-label={`${index === 0 ? "当前题目" : "下一题预览"}：${question.degree.label}`}
+                >
+                  <div
+                    key={index === 0 ? session.errors : "preview"}
+                    className={`degree ${index === 0 && wrongAnimation ? "wrong-animation" : ""} ${index === 0 && session.solved ? "solved" : ""} ${index === 0 && successAnimation ? "correct-animation" : ""}`}
+                  >
+                    <span className="degree-accidental">
+                      {question.degree.label.match(/^[♭♯]/)?.[0]}
+                    </span>
+                    <span>{question.degree.label.replace(/^[♭♯]/, "")}</span>
+                  </div>
+                </div>
+              ))}
             </div>
             <div
               className="feedback-slot"
