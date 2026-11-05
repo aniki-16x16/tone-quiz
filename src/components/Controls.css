@@ -1,0 +1,280 @@
+.select-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+}
+.field-label {
+  color: #73806e;
+  font-size: 12px;
+}
+.select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 14px;
+  border: 1px solid #dde4d7;
+  border-radius: 10px;
+  background: #fff;
+  color: #344b3d;
+  text-align: left;
+  font-size: 14px;
+  transition:
+    border-color 160ms,
+    background 160ms,
+    box-shadow 160ms;
+}
+.select-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-chevron {
+  flex-shrink: 0;
+  color: #7f9177;
+  transition: transform 180ms ease;
+}
+.select-trigger.is-open {
+  border-color: #6f9363;
+  background: #fcfef9;
+  box-shadow: 0 0 0 3px #70905b14;
+}
+.select-trigger.is-open .select-chevron {
+  transform: rotate(180deg);
+}
+.select-popup {
+  position: fixed;
+  z-index: 100;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #dfe6d8;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow:
+    0 12px 36px #2a472a20,
+    0 2px 6px #2a472a08;
+  animation: select-open 160ms ease-out both;
+  scrollbar-width: thin;
+  scrollbar-color: #c8d4bf transparent;
+}
+.select-popup.is-closing {
+  pointer-events: none;
+  animation: select-close 160ms ease-in both;
+}
+.select-popup[data-side="above"] {
+  animation-name: select-open-above;
+}
+.select-popup[data-side="above"].is-closing {
+  animation-name: select-close-above;
+}
+.select-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.select-popup.is-grid .select-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 46px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: transparent;
+  color: #40523e;
+  font-size: 14px;
+  text-align: left;
+  transition:
+    background 100ms,
+    color 100ms,
+    transform 100ms;
+}
+.select-option.is-active {
+  background: #f0f4ea;
+}
+.select-option[aria-selected="true"] {
+  background: #e9f1df;
+  color: #345e32;
+}
+.select-option:active {
+  transform: scale(0.97);
+}
+.option-check {
+  flex-shrink: 0;
+  opacity: 0;
+  transform: scale(0.65);
+  transition:
+    opacity 140ms,
+    transform 140ms;
+}
+.select-option[aria-selected="true"] .option-check {
+  opacity: 1;
+  transform: scale(1);
+}
+.select-popup.is-grid .select-option {
+  padding: 10px;
+  font-size: 16px;
+}
+.toggle-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px;
+  background: transparent;
+  border-radius: 9px;
+  font-size: 14px;
+  color: #586d4d;
+  white-space: nowrap;
+  transition:
+    color 160ms,
+    background 160ms;
+}
+.toggle-track {
+  flex-shrink: 0;
+  width: 48px;
+  height: 28px;
+  padding: 3px;
+  border-radius: 20px;
+  background: #d9e1d2;
+  transition: background 200ms;
+}
+.toggle-track > span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px #213c2b20;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 120ms;
+}
+.is-on .toggle-track {
+  background: #6b8c58;
+}
+.is-on .toggle-track > span {
+  transform: translateX(20px);
+}
+.toggle-control:active .toggle-track > span {
+  width: 25px;
+}
+.toggle-control.is-on:active .toggle-track > span {
+  transform: translateX(17px);
+}
+.checkbox-box {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid #b7c5ad;
+  border-radius: 7px;
+  background: #fff;
+  color: #fff;
+  transition:
+    background 180ms,
+    border-color 180ms,
+    transform 120ms;
+}
+.checkbox-box svg {
+  opacity: 0;
+  transform: scale(0.55);
+  transition:
+    opacity 140ms,
+    transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+.is-on .checkbox-box {
+  border-color: #6b8c58;
+  background: #6b8c58;
+}
+.is-on .checkbox-box svg {
+  opacity: 1;
+  transform: scale(1);
+}
+.toggle-control:active .checkbox-box {
+  transform: scale(0.9);
+}
+.toggle-compact-label {
+  display: none;
+}
+@media (hover: hover) {
+  .select-trigger:hover {
+    border-color: #9db08f;
+  }
+  .toggle-control:hover {
+    color: #2c4d28;
+  }
+}
+@keyframes select-open {
+  from {
+    opacity: 0;
+    translate: 0 -5px;
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+@keyframes select-close {
+  from {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    translate: 0 -4px;
+    scale: 0.98;
+  }
+}
+@keyframes select-open-above {
+  from {
+    opacity: 0;
+    translate: 0 5px;
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+@keyframes select-close-above {
+  from {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    translate: 0 4px;
+    scale: 0.98;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .select-popup,
+  .select-option,
+  .select-chevron,
+  .select-trigger,
+  .toggle-control,
+  .toggle-track,
+  .toggle-track > span,
+  .checkbox-box,
+  .checkbox-box svg {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

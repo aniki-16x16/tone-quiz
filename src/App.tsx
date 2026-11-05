@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useMidi, useMobileLayout, usePreferences, useTone } from "./hooks.ts";
 import {
@@ -9,6 +9,7 @@ import {
 } from "./music.ts";
 import type { Preferences, QuizConfig } from "./music.ts";
 import { practiceReducer, startPractice } from "./practice.ts";
+import { Select, Toggle } from "./components/Controls.tsx";
 import "./App.css";
 
 const KEY_CODES = [
@@ -94,6 +95,7 @@ function App() {
     (config) => startPractice(createQuestion(config)),
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const configurationRef = useRef<HTMLElement>(null);
   const [midiOpen, setMidiOpen] = useState(false);
   const [settledErrorToken, setSettledErrorToken] = useState("");
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
@@ -151,7 +153,9 @@ function App() {
         return;
       if (
         event.target instanceof HTMLElement &&
-        event.target.closest('input,select,textarea,[contenteditable="true"]')
+        event.target.closest(
+          'input,select,textarea,[contenteditable="true"],[data-quiz-control]',
+        )
       )
         return;
       const pitch = KEY_CODES.indexOf(event.code);
@@ -177,6 +181,28 @@ function App() {
       window.removeEventListener("blur", blur);
     };
   }, [mobile, submit]);
+
+  useEffect(() => {
+    if (!mobile || !settingsOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+      if (
+        configurationRef.current?.contains(event.target) ||
+        event.target.closest(".select-popup")
+      )
+        return;
+      setSettingsOpen(false);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setSettingsOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [mobile, settingsOpen]);
 
   function updateConfig(patch: Partial<QuizConfig>) {
     const next = { ...preferences, ...patch };
@@ -250,7 +276,6 @@ function App() {
                   <>
                     {!midi.authorized || midi.error ? (
                       <>
-                        <p>连接键盘，授权后即可直接弹奏作答。</p>
                         <button
                           className="button primary"
                           disabled={midi.connecting}
@@ -271,27 +296,21 @@ function App() {
                         未发现 MIDI 键盘，连接设备后将自动识别。
                       </p>
                     ) : (
-                      <label className="select-field">
-                        输入设备
-                        <select
-                          value={midi.selectedId}
-                          onChange={(event) =>
-                            midi.setSelectedId(event.target.value)
-                          }
-                        >
-                          {midi.inputs.map((input) => (
-                            <option key={input.id} value={input.id}>
-                              {input.name || "未命名 MIDI 设备"}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <Select
+                        label="输入设备"
+                        value={midi.selectedId}
+                        onChange={midi.setSelectedId}
+                        options={midi.inputs.map((input) => ({
+                          value: input.id,
+                          label: input.name || "未命名 MIDI 设备",
+                        }))}
+                      />
                     )}
                     {midi.error && <p role="status">{midi.error}</p>}
                     {midi.connected && (
                       <p className="device-ready">
                         <span />
-                        已就绪 · 任意八度均可作答
+                        已连接
                       </p>
                     )}
                   </>
@@ -303,17 +322,8 @@ function App() {
       </header>
 
       <main>
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">NOTE BY NOTE</p>
-            <h1>
-              让级数成为直觉<span>。</span>
-            </h1>
-          </div>
-          <p className="heading-description">看级数，回答对应的音。</p>
-        </div>
-
         <section
+          ref={configurationRef}
           className={`configuration ${settingsOpen ? "is-open" : ""}`}
           aria-label="练习设置"
         >
@@ -329,58 +339,43 @@ function App() {
             </span>
             <Icon name="settings" />
           </button>
-          <div className="configuration-fields">
-            <label className="select-field">
-              主音
-              <select
-                value={preferences.tonic}
-                onChange={(event) =>
-                  updateConfig({ tonic: Number(event.target.value) })
-                }
-              >
-                {NOTE_NAMES.map((name, pitch) => (
-                  <option key={name} value={pitch}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="select-field">
-              调性
-              <select
-                value={preferences.mode}
-                onChange={(event) =>
-                  updateConfig({
-                    mode: event.target.value as QuizConfig["mode"],
-                  })
-                }
-              >
-                <option value="major">自然大调</option>
-                <option value="minor">自然小调</option>
-              </select>
-            </label>
-            <label className="select-field">
-              题目范围
-              <select
-                value={preferences.difficulty}
-                onChange={(event) =>
-                  updateConfig({
-                    difficulty: event.target.value as QuizConfig["difficulty"],
-                  })
-                }
-              >
-                <option value="diatonic">基础 · 调内音</option>
-                <option value="chromatic">进阶 · 加入调外音</option>
-              </select>
-            </label>
-            <div className="configuration-note">
-              <span className="tiny-note">♪</span>
-              <span>
-                专注音高
-                <br />
-                无需区分八度
-              </span>
-            </div>
+          <div
+            className="configuration-fields"
+            inert={mobile && !settingsOpen}
+            aria-hidden={mobile && !settingsOpen}
+          >
+            <Select
+              label="主音"
+              value={String(preferences.tonic)}
+              grid
+              onChange={(value) => updateConfig({ tonic: Number(value) })}
+              options={NOTE_NAMES.map((name, pitch) => ({
+                value: String(pitch),
+                label: name,
+              }))}
+            />
+            <Select
+              label="调性"
+              value={preferences.mode}
+              onChange={(value) =>
+                updateConfig({ mode: value as QuizConfig["mode"] })
+              }
+              options={[
+                { value: "major", label: "自然大调" },
+                { value: "minor", label: "自然小调" },
+              ]}
+            />
+            <Select
+              label="题目范围"
+              value={preferences.difficulty}
+              onChange={(value) =>
+                updateConfig({ difficulty: value as QuizConfig["difficulty"] })
+              }
+              options={[
+                { value: "diatonic", label: "基础 · 调内音" },
+                { value: "chromatic", label: "进阶 · 加入调外音" },
+              ]}
+            />
           </div>
         </section>
 
@@ -389,10 +384,6 @@ function App() {
           aria-label="单音练习"
         >
           <div className="practice-topline">
-            <span className="live-label">
-              <span />
-              正在练习
-            </span>
             <div className="statistics" aria-label="本轮统计">
               <span>
                 正确率{" "}
@@ -408,7 +399,19 @@ function App() {
           </div>
 
           <div className="question-zone">
-            <p className="question-key">{scaleName}</p>
+            <div className="question-meta">
+              <p className="question-key">{scaleName}</p>
+              <button
+                className="listen-button"
+                disabled={audioUnavailable}
+                onClick={() => {
+                  void play(preferences.tonic);
+                }}
+              >
+                <Icon name="sound" size={16} />
+                {audioUnavailable ? "声音不可用" : "听主音"}
+              </button>
+            </div>
             <div
               key={`${session.question.id}-${session.errors}`}
               className={`degree ${wrongAnimation ? "wrong-animation" : ""} ${session.solved ? "solved" : ""}`}
@@ -419,18 +422,6 @@ function App() {
               </span>
               <span>{session.question.degree.label.replace(/^[♭♯]/, "")}</span>
             </div>
-            <p className="question-instruction">
-              {midi.connected ? "在 MIDI 键盘上弹奏对应的音" : "选择对应的音"}
-            </p>
-            <button
-              className="listen-button"
-              onClick={() => {
-                void play(preferences.tonic);
-              }}
-            >
-              <Icon name="sound" size={16} />
-              听主音
-            </button>
             <div
               className="feedback-slot"
               aria-live="polite"
@@ -457,16 +448,37 @@ function App() {
           </div>
 
           <div className="answer-area">
-            <div className="answer-heading">
-              <span>{midi.connected ? "键盘输入" : "你的答案"}</span>
-              <span className="input-method">
-                {mobile
-                  ? "轻触作答"
-                  : midi.connected
-                    ? midi.inputs.find((input) => input.id === midi.selectedId)
-                        ?.name || "MIDI 键盘"
-                    : "鼠标点击 / 电脑键盘"}
-              </span>
+            <div className="practice-actions">
+              <Toggle
+                label="自动下一题"
+                compactLabel="自动切题"
+                checked={preferences.autoAdvance}
+                onChange={(value) => updatePreference("autoAdvance", value)}
+              />
+              <button
+                type="button"
+                className={`next-button ${session.solved ? "available" : ""}`}
+                aria-label={
+                  midi.held && session.solved ? "松开琴键后继续" : "下一题"
+                }
+                title={
+                  midi.held && session.solved ? "松开琴键后继续" : "下一题"
+                }
+                disabled={!session.solved || midi.held}
+                onClick={advance}
+              >
+                <span>
+                  {midi.held && session.solved ? "松开琴键后继续" : "下一题"}
+                </span>
+                <Icon name="arrow" size={19} />
+              </button>
+              <Toggle
+                kind="checkbox"
+                label="答题发声"
+                compactLabel="声音"
+                checked={preferences.sound}
+                onChange={(value) => updatePreference("sound", value)}
+              />
             </div>
             {mobile ? (
               <div className="note-grid" aria-label="选择音名">
@@ -518,48 +530,8 @@ function App() {
                 )}
               </div>
             )}
-            <div className="practice-actions">
-              <label className="switch-label">
-                <input
-                  type="checkbox"
-                  checked={preferences.autoAdvance}
-                  onChange={(event) =>
-                    updatePreference("autoAdvance", event.target.checked)
-                  }
-                />
-                <span className="switch-track" aria-hidden="true" />
-                <span>自动下一题</span>
-              </label>
-              <button
-                className={`next-button ${session.solved ? "available" : ""}`}
-                disabled={!session.solved || midi.held}
-                onClick={advance}
-              >
-                {midi.held && session.solved ? "松开琴键后继续" : "下一题"}
-                <Icon name="arrow" size={16} />
-              </button>
-              <label className="sound-setting">
-                <input
-                  type="checkbox"
-                  checked={preferences.sound}
-                  onChange={(event) =>
-                    updatePreference("sound", event.target.checked)
-                  }
-                />
-                <Icon name="sound" size={16} />
-                <span>答题发声</span>
-              </label>
-            </div>
           </div>
         </section>
-        <footer className="page-footer">
-          <span>每一次作答，都离直觉更近一点。</span>
-          <span>
-            {audioUnavailable
-              ? "当前浏览器暂时无法播放声音"
-              : "首次作答计入正确率"}
-          </span>
-        </footer>
       </main>
     </div>
   );
