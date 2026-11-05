@@ -1,5 +1,7 @@
 import { getAnswerNoteNames, pitchClass } from "./music.ts";
 import type { Mode, Question } from "./music.ts";
+import { BalancedSampler } from "./random.ts";
+import type { RandomSource } from "./random.ts";
 
 export const CHORD_LEVELS = {
   diatonic: "01 · 调内三／七和弦",
@@ -134,19 +136,17 @@ export function getChordPool(config: ChordConfig): Candidate[] {
 }
 
 export function createChordQuestion(
-  config: ChordConfig, previous?: Question, random = Math.random,
+  config: ChordConfig, previous?: Question, random?: RandomSource,
 ): Question {
   const pool = getChordPool(config);
   // Sample the bass-independent symbol first, so slash variants do not dominate.
   const groups = new Map<string, Candidate[]>();
   for (const chord of pool) {
-    if (chord.label === previous?.degree.label) continue;
     const key = `${chord.root}:${chord.quality}`;
     const group = groups.get(key) ?? [];
     group.push(chord);
     groups.set(key, group);
   }
-  const pick = <T,>(items: T[]): T => items[Math.min(items.length - 1, Math.floor(random() * items.length))];
   // Sample roots first, keeping roots with more chord qualities from dominating.
   const rootGroups = new Map<number, Candidate[][]>();
   for (const group of groups.values()) {
@@ -155,12 +155,21 @@ export function createChordQuestion(
     qualities.push(group);
     rootGroups.set(root, qualities);
   }
-  const group = pick(pick([...rootGroups.values()]));
-  // Half root-position, half slash when enabled; each slash has equal probability.
+  const sampler = new BalancedSampler(
+    JSON.stringify(["chord", config.tonic, config.mode, config.level,
+      config.includeColors, config.includeSlash, config.includeChromaticRoots]), previous?.sequence, random,
+  );
+  const root = sampler.take("roots", [...rootGroups.keys()].map(String), previous && String(previous.answer));
+  const qualities = rootGroups.get(Number(root))!;
+  const quality = sampler.take(`qualities:${root}`, qualities.map(group => group[0].quality));
+  const group = qualities.find(items => items[0].quality === quality)!;
+  // Balance root position vs slash, then cycle through the available basses.
   const rootPosition = group.find(chord => chord.bass === chord.root);
   const slash = group.filter(chord => chord.bass !== chord.root);
-  const selected = rootPosition && (!slash.length || random() < 0.5)
-    ? rootPosition : pick(slash.length ? slash : group);
+  const position = sampler.take(`positions:${root}:${quality}`, slash.length ? ["root", "slash"] : ["root"]);
+  const bass = position === "slash"
+    ? sampler.take(`basses:${root}:${quality}`, slash.map(chord => String(chord.bass))) : root;
+  const selected = position === "root" ? rootPosition! : slash.find(chord => String(chord.bass) === bass)!;
   const names = getAnswerNoteNames(config);
   return {
     id: previous ? previous.id + 1 : 1,
@@ -169,6 +178,7 @@ export function createChordQuestion(
     chord: { root: selected.root, bass: selected.bass, tones: selected.tones,
       rootDegree: selected.rootDegree, bassDegree: selected.bassDegree, quality: selected.quality,
       toneNames: selected.tones.map(n => names[n]) },
+    sequence: sampler.snapshot(),
   };
 }
 

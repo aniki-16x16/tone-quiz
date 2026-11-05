@@ -1,3 +1,6 @@
+import { BalancedSampler } from "./random.ts";
+import type { RandomSnapshot, RandomSource } from "./random.ts";
+
 export const NOTE_NAMES = [
   "C",
   "D♭",
@@ -47,6 +50,7 @@ export type Question = {
   degree: Degree;
   answer: number;
   chord?: ChordDefinition;
+  sequence?: RandomSnapshot;
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -140,22 +144,22 @@ export function getQuestionGroups(config: QuizConfig): Degree[][] {
 export function createQuestion(
   config: QuizConfig,
   previous?: Question,
-  random = Math.random,
+  random?: RandomSource,
 ): Question {
-  // Sample pitches first so enharmonic spellings do not overweight one pitch.
-  const groups = getQuestionGroups(config).filter(
-    (group) =>
-      !previous ||
-      pitchClass(config.tonic + group[0].semitones) !== previous.answer,
+  const sampler = new BalancedSampler(
+    JSON.stringify(["note", config.tonic, config.mode, config.difficulty]), previous?.sequence, random,
   );
-  const group =
-    groups[Math.min(groups.length - 1, Math.floor(random() * groups.length))];
-  const selected =
-    group[Math.min(group.length - 1, Math.floor(random() * group.length))];
+  const groups = getQuestionGroups(config);
+  const pitches = groups.map(group => String(pitchClass(config.tonic + group[0].semitones)));
+  const pitch = sampler.take("pitches", pitches, previous && String(previous.answer));
+  const group = groups[pitches.indexOf(pitch)];
+  const label = sampler.take(`spellings:${pitch}`, group.map(item => item.label));
+  const selected = group.find(item => item.label === label)!;
   return {
     id: previous ? previous.id + 1 : 1,
     degree: selected,
     answer: pitchClass(config.tonic + selected.semitones),
+    sequence: sampler.snapshot(),
   };
 }
 
