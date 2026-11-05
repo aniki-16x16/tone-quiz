@@ -119,7 +119,7 @@ function App() {
     id: number;
     questionId: number;
   } | null>(null);
-  const { play, syncMidi, prepare, unavailable: audioUnavailable } = useTone();
+  const { play, playMidi, stopMidi, prepare, unavailable: audioUnavailable } = useTone();
   const inputQuestionRef = useRef("");
   const questionToken = `${practiceMode}:${session.question.id}`;
 
@@ -140,16 +140,15 @@ function App() {
     if (frame.first) inputQuestionRef.current = questionToken;
     const currentGesture = inputQuestionRef.current === questionToken;
     if (!chordMode || !currentGesture || session.solved) {
-      syncMidi([]);
       return;
     }
-    syncMidi(preferences.sound ? frame.notes : [], preferences.sound ? frame.noteOn : undefined);
+    if (preferences.sound && frame.noteOn !== undefined) playMidi(frame.noteOn);
     dispatch({ type: "chord", notes: frame.notes, noteOn: frame.noteOn, previousId: session.question.id });
-  }, [chordMode, questionToken, session.solved, session.question.id, preferences.sound, syncMidi, dispatch]);
+  }, [chordMode, questionToken, session.solved, session.question.id, preferences.sound, playMidi, dispatch]);
   const midi = useMidi(!mobile, submit, receiveChord);
   useEffect(() => {
-    if (!chordMode || !midi.connected || !preferences.sound) syncMidi([]);
-  }, [chordMode, midi.connected, preferences.sound, syncMidi]);
+    if (!chordMode || !midi.connected || !preferences.sound) stopMidi();
+  }, [chordMode, midi.connected, preferences.sound, stopMidi]);
   const modeName = MODE_NAMES[config.mode];
   const answerNoteNames = getAnswerNoteNames(config);
   const scaleName = `${NOTE_NAMES[config.tonic]} ${modeName}`;

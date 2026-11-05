@@ -2,20 +2,37 @@ import { pitchClass } from "./music.ts";
 import { NOTE_TIMING } from "./timing.ts";
 
 export type ToneVoice = { release: () => void };
+type VoiceOptions = {
+  midi?: boolean;
+  destination?: AudioNode;
+  onEnded?: () => void;
+};
+
+// Both exercise modes share this output, keeping polyphonic peaks controlled
+// without reducing the gain of every MIDI note.
+export function createToneOutput(context: BaseAudioContext): DynamicsCompressorNode {
+  const output = context.createDynamicsCompressor();
+  output.threshold.value = -18;
+  output.knee.value = 12;
+  output.ratio.value = 12;
+  output.attack.value = 0.003;
+  output.release.value = 0.25;
+  output.connect(context.destination);
+  return output;
+}
 
 // Electric-piano-style voice: warm body + evolving FM tine + mild tremolo.
 // All pitch components stay harmonic; tremolo changes volume, never tuning.
 export function createMelodyVoice(
   context: BaseAudioContext,
   pitch: number,
-  midi = false,
+  options: VoiceOptions = {},
 ): ToneVoice {
   const now = context.currentTime;
-  const frequency = 440 * 2 ** (((midi ? pitch : 60 + pitchClass(pitch)) - 69) / 12);
+  const frequency = 440 * 2 ** (((options.midi ? pitch : 60 + pitchClass(pitch)) - 69) / 12);
   const output = context.createGain();
-  const level = midi ? 0.4 : 1;
-  output.gain.value = level;
-  output.connect(context.destination);
+  output.gain.value = 1;
+  output.connect(options.destination ?? context.destination);
   const envelope = context.createGain();
   const motion = context.createGain();
   const bodyLevel = context.createGain();
@@ -85,7 +102,10 @@ export function createMelodyVoice(
     oscillator.stop(now + NOTE_TIMING.end + 0.01);
     oscillator.onended = () => {
       oscillator.disconnect();
-      if (--remaining === 0) for (const node of nodes) node.disconnect();
+      if (--remaining === 0) {
+        for (const node of nodes) node.disconnect();
+        options.onEnded?.();
+      }
     };
   }
 
@@ -95,7 +115,7 @@ export function createMelodyVoice(
       released = true;
       const at = context.currentTime;
       // Keep a short release between notes instead of abruptly cutting the body.
-      output.gain.setValueAtTime(level, at);
+      output.gain.setValueAtTime(1, at);
       output.gain.linearRampToValueAtTime(0, at + NOTE_TIMING.retriggerRelease);
       for (const oscillator of oscillators)
         oscillator.stop(at + NOTE_TIMING.retriggerRelease + 0.01);

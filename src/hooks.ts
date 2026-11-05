@@ -3,7 +3,7 @@ import { MidiNoteGate, parseMidiNote } from "./midi.ts";
 import type { MidiFrame } from "./midi.ts";
 import { DEFAULT_CHORD_CONFIG, parseChordConfig } from "./chords.ts";
 import type { ChordConfig } from "./chords.ts";
-import { createMelodyVoice } from "./audio.ts";
+import { createMelodyVoice, createToneOutput } from "./audio.ts";
 import type { ToneVoice } from "./audio.ts";
 import { DEFAULT_PREFERENCES, parsePreferences } from "./music.ts";
 import type { Preferences } from "./music.ts";
@@ -48,12 +48,15 @@ export function useTone() {
   const contextRef = useRef<AudioContext | null>(null);
   const voiceRef = useRef<ToneVoice | null>(null);
   const midiVoices = useRef(new Map<number, ToneVoice>());
-  const midiNotes = useRef<readonly number[]>([]);
+  const ringingVoices = useRef(new Set<ToneVoice>());
+  const pendingMidi = useRef(new Map<number, symbol>());
+  const outputRef = useRef<DynamicsCompressorNode | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const prepare = useCallback(async () => {
     try {
       const context = contextRef.current ?? new AudioContext();
       contextRef.current = context;
+      outputRef.current ??= createToneOutput(context);
       if (context.state === "suspended") await context.resume();
       return context;
     } catch {
@@ -66,38 +69,49 @@ export function useTone() {
       const context = await prepare();
       if (!context || context.state !== "running") return;
       voiceRef.current?.release();
-      voiceRef.current = createMelodyVoice(context, pitch);
+      voiceRef.current = createMelodyVoice(context, pitch, { destination: outputRef.current! });
     },
     [prepare],
   );
-  const syncMidi = useCallback((notes: readonly number[], noteOn?: number) => {
-    midiNotes.current = notes;
-    for (const [note, voice] of midiVoices.current) {
-      if (!notes.includes(note)) {
-        voice.release();
-        midiVoices.current.delete(note);
-      }
-    }
-    if (noteOn === undefined) return;
+  const playMidi = useCallback((note: number) => {
+    const ticket = Symbol();
+    pendingMidi.current.set(note, ticket);
     void prepare().then(context => {
-      if (!context || context.state !== "running" || !midiNotes.current.includes(noteOn)) return;
-      midiVoices.current.get(noteOn)?.release();
-      midiVoices.current.set(noteOn, createMelodyVoice(context, noteOn, true));
+      if (pendingMidi.current.get(note) !== ticket) return;
+      pendingMidi.current.delete(note);
+      if (!context || context.state !== "running") return;
+      midiVoices.current.get(note)?.release();
+      const voice = createMelodyVoice(context, note, {
+        midi: true,
+        destination: outputRef.current!,
+        onEnded: () => {
+          ringingVoices.current.delete(voice);
+          if (midiVoices.current.get(note) === voice) midiVoices.current.delete(note);
+        },
+      });
+      midiVoices.current.set(note, voice);
+      ringingVoices.current.add(voice);
     });
   }, [prepare]);
+  const stopMidi = useCallback(() => {
+    pendingMidi.current.clear();
+    for (const voice of ringingVoices.current) voice.release();
+    ringingVoices.current.clear();
+    midiVoices.current.clear();
+  }, []);
   useEffect(
     () => () => {
       voiceRef.current?.release();
       voiceRef.current = null;
-      midiNotes.current = [];
-      for (const voice of midiVoices.current.values()) voice.release();
-      midiVoices.current.clear();
+      stopMidi();
+      outputRef.current?.disconnect();
+      outputRef.current = null;
       void contextRef.current?.close();
       contextRef.current = null;
     },
-    [],
+    [stopMidi],
   );
-  return { play, syncMidi, prepare, unavailable };
+  return { play, playMidi, stopMidi, prepare, unavailable };
 }
 
 export function useChordPreferences() {
